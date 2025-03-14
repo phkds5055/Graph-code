@@ -1,0 +1,140 @@
+### 그래프 템플릿
+
+import plotly.graph_objects as go
+
+def create_time_series_plot(
+    df, 
+    columns, 
+    title="Time Series Plot", 
+    xaxis_title="Year", 
+    yaxis_title="Value", 
+    colors=None, 
+    dash_styles=None, 
+    line_widths=None, 
+    legend_pos=(0.01, 0.99),  # (x, y)
+    template="plotly_white"
+):
+    """
+    Plotly 기반 시계열 라인 그래프 템플릿 함수
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        시계열 데이터가 들어 있는 DataFrame. df.index는 datetime 형식으로 세팅해두는 것을 권장.
+    columns : list of str
+        그래프에 표시할 y축 컬럼들의 리스트. 예: ["NVDA", "AMD", "INTC"]
+    title : str
+        그래프 제목
+    xaxis_title : str
+        x축 레이블
+    yaxis_title : str
+        y축 레이블
+    colors : list of str, optional
+        라인 색상 목록. columns의 순서와 같은 길이로 지정.
+        예: ["blue", "red", "green", "purple"]
+    dash_styles : list of str, optional
+        라인 스타일 목록. ("solid", "dash", "dot", "dashdot" 등)
+    line_widths : list of float, optional
+        라인 두께 목록.
+    legend_pos : tuple, optional
+        범례(legend) 위치. (x, y) 형태로, 0 <= x <= 1, 0 <= y <= 1
+    template : str, optional
+        Plotly 템플릿. 기본값 "plotly_white".
+
+    Returns
+    -------
+    fig : plotly.graph_objects.Figure
+        생성된 Figure 객체
+    """
+    # 만약 colors, dash_styles, line_widths가 지정되지 않았다면 기본값 세팅
+    num_cols = len(columns)
+
+    if colors is None:
+        colors = ["blue", "red", "green", "purple", "orange", "cyan", "magenta", "brown"]
+    if dash_styles is None:
+        dash_styles = ["solid"] * num_cols
+    if line_widths is None:
+        line_widths = [2] * num_cols
+
+    # 필요한 길이만큼 잘라서 사용 (columns가 더 많으면 색상 등도 그만큼 늘려주면 좋음)
+    colors = colors[:num_cols]
+    dash_styles = dash_styles[:num_cols]
+    line_widths = line_widths[:num_cols]
+
+    # 빈 Figure 생성
+    fig = go.Figure()
+
+    # 컬럼별로 Trace 추가
+    for i, col in enumerate(columns):
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=df[col],
+            mode="lines",
+            name=col,
+            line=dict(color=colors[i], dash=dash_styles[i], width=line_widths[i])
+        ))
+
+    # 레이아웃 설정
+    fig.update_layout(
+        title=title,
+        xaxis_title=xaxis_title,
+        yaxis_title=yaxis_title,
+        xaxis=dict(
+            tickangle=45,
+            showgrid=True,
+            gridcolor="lightgray"
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="lightgray"
+        ),
+        template=template,
+        legend=dict(x=legend_pos[0], y=legend_pos[1])
+    )
+    return fig
+
+
+
+### 사용 예시
+
+import pandas as pd
+
+# 예시: market_data.xlsx 파일에서 'HM' 시트(반도체 기업 시총) 로드
+df = pd.read_excel("market_data.xlsx", sheet_name="HM")
+
+# 기본 전처리 (Date를 인덱스로, datetime 변환 등)
+df.rename(columns={df.columns[0]: "Date"}, inplace=True)
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+df.dropna(subset=["Date"], inplace=True)
+df.set_index("Date", inplace=True)
+
+# (만약 데이터가 백만 단위라서 십억 단위로 변환하고 싶다면)
+tickers = ["INTC US Equity", "NVDA US Equity", "AVGO US Equity", "AMD US Equity"]
+df[tickers] = df[tickers] / 1000  # 백만 단위를 1000으로 나눠서 십억 단위로 변환
+
+# 컬럼 이름을 깔끔하게 바꾸고 싶다면?
+rename_map = {
+    "INTC US Equity": "INTC",
+    "NVDA US Equity": "NVDA",
+    "AVGO US Equity": "AVGO",
+    "AMD US Equity": "AMD"
+}
+df.rename(columns=rename_map, inplace=True)
+columns_to_plot = list(rename_map.values())  # ["INTC", "NVDA", "AVGO", "AMD"]
+
+# 템플릿 함수 불러오기
+fig = create_time_series_plot(
+    df=df,
+    columns=columns_to_plot,
+    title="Semiconductor Market Cap (2016-Present)",
+    xaxis_title="Year",
+    yaxis_title="Market Cap (Billion USD)",
+    colors=["blue", "red", "green", "purple"],        # 원하는 색상 목록
+    dash_styles=["solid", "dash", "dot", "dashdot"],  # 라인 스타일 지정 (선택)
+    line_widths=[2.5, 2, 2, 2],                       # 라인 굵기 지정 (선택)
+    legend_pos=(0.01, 0.99),                          # 범례 위치
+    template="plotly_white"                           # Plotly 템플릿
+)
+
+fig.show()
+
