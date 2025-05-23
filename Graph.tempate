@@ -522,3 +522,110 @@ fig.update_layout(
 )
 
 fig.show()
+
+
+
+#### rolling 상관 계수 구하기
+
+#!/usr/bin/env python3
+"""
+rolling_return_stats_fund_nav.py
+
+fund_nav.csv 파일을 읽어 3, 6, 12개월 롤링 수익률 통계를 계산하고,
+결과를 엑셀 파일로 저장하는 스크립트입니다.
+Usage:
+    python rolling_return_stats_fund_nav.py
+"""
+import os
+import pandas as pd
+
+
+def compute_rolling_stats(nav_series, windows):  # type: (pd.Series, list) -> pd.DataFrame
+    # 월말 기준으로 리샘플링
+    nav_monthly = nav_series.resample('M').last()
+    records = []
+    for w in windows:
+        ret = nav_monthly.pct_change(periods=w).dropna()
+        if ret.empty:
+            continue
+        mean_r = ret.mean()
+        min_r = ret.min()
+        max_r = ret.max()
+        loss_mask = ret < 0
+        avg_loss = ret[loss_mask].mean() if loss_mask.any() else 0.0
+        loss_prob = float(loss_mask.sum()) / len(ret) if len(ret) > 0 else 0.0
+        records.append({
+            'window_months': w,
+            'mean_return': mean_r,
+            'min_return': min_r,
+            'max_return': max_r,
+            'avg_loss': avg_loss,
+            'loss_prob': loss_prob
+        })
+    return pd.DataFrame(records)
+
+
+def main():
+    # 1) CSV 파일 로드 (C:\Users\USER 폴더)
+    user_folder = r"C:\Users\USER"
+    csv_filename = 'fund_nav.csv'
+    csv_path = os.path.join(user_folder, csv_filename)
+    if not os.path.isfile(csv_path):
+        print(f"Error: '{csv_filename}' 파일이 '{user_folder}'에 없습니다.")
+        return
+    print(f"Loading CSV file: {csv_path}")
+    try:
+        df = pd.read_csv(
+            csv_path,
+            sep=',',
+            parse_dates=['일자'],
+            encoding='cp949',
+            engine='python'
+        )
+    except Exception as e:
+        print(f"Error reading CSV file: {e}")
+        return
+
+    # 컬럼명 정리: 줄바꿈 제거 및 공백 트리밍
+    df.columns = df.columns.map(lambda x: str(x).replace('\n', ' ').strip())
+
+    # 2) 일자 인덱스 설정
+    if '일자' not in df.columns:
+        print("Error: '일자' 컬럼이 없습니다. (실제 컬럼: {})".format(list(df.columns)))
+        return
+    df['일자'] = pd.to_datetime(df['일자'])
+    df.set_index('일자', inplace=True)
+
+    # 3) 수정 기준가 컬럼 확인 및 숫자로 변환
+    nav_col = '수정 기준가'
+    if nav_col not in df.columns:
+        print(f"Error: '{nav_col}' 컬럼이 없습니다. (실제 컬럼: {list(df.columns)})")
+        return
+    df[nav_col] = pd.to_numeric(
+        df[nav_col].astype(str).str.replace(',', ''),
+        errors='coerce'
+    )
+
+    # 4) 롤링 통계 계산
+    windows = [3, 6, 12]
+    stats_df = compute_rolling_stats(df[nav_col], windows)
+    if stats_df.empty:
+        print("Error: 충분한 데이터가 없어 롤링 통계를 계산할 수 없습니다.")
+        return
+
+    # 5) 결과 출력
+    print(stats_df)
+
+    # 6) 결과 엑셀로 저장
+    out_filename = 'rolling_return_stats.xlsx'
+    out_path = os.path.join(user_folder, out_filename)
+    try:
+        stats_df.to_excel(out_path, index=False)
+        print(f"Saved rolling return statistics to {out_path}")
+    except Exception as e:
+        print(f"Error saving Excel file: {e}")
+
+
+if __name__ == '__main__':
+    main()
+
